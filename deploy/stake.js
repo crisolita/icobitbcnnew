@@ -2,7 +2,7 @@ const CONTRACT_NAME = "StakingRewardsFactory";
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
   const genesis = new Date();
-  const _stakingToken = "0x422313d9300243AAE85969BFe728E4B9Da86A60e";
+  const _stakingToken = "0x849921808285Eb9d8CD79F5eD63f653468Ca2298";
   const { deploy, log } = deployments;
   const namedAccounts = await getNamedAccounts();
   const { deployer } = namedAccounts;

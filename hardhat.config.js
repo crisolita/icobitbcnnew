@@ -28,14 +28,13 @@ module.exports = {
       },
     },
     testnet: {
-      url: "https://rpc-mumbai.maticvigil.com/",
-      chainId: 80001,
+      url: "https://rpc-amoy.polygon.technology",
+      chainId: 80002,
       accounts: [process.env.TESTNETPRIVKEY],
     },
     mainnet: {
-      url: "https://bsc-dataseed.binance.org/",
-      chainId: 56,
-      gasLimit: 200000000,
+      url: "https://polygon-rpc.com",
+      chainId: 137,
       accounts: [process.env.MAINNETPRIVKEY],
       saveDeployments: true,
     },

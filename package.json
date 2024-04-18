@@ -8,7 +8,7 @@
     "compile": "hardhat compile",
     "coverage": "hardhat coverage",
     "deploy": "hardhat deploy --tags Sale --write true",
-    "testnet:deploy": "hardhat deploy --tags Sale --network testnet",
+    "testnet:deploy": "hardhat deploy --tags GKHAN --network testnet",
     "mainnet:deploy": "hardhat deploy --tags StakingRewardsFactory --network mainnet",
     "t:verify": "hardhat --network testnet etherscan-verify --sleep",
     "m:verify": "hardhat --network mainnet etherscan-verify --sleep",

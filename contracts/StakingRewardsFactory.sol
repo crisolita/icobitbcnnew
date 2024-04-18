@@ -54,8 +54,8 @@ contract StakingRewardsFactory is Ownable {
 		address stakingToken,
 		uint256 rewardAmount,
 		uint256 rewardsDuration,
-		uint256[] memory stakedTimeToClaim,
-		uint256 timelock
+		uint256[2] memory _timeInSeconds,
+		uint256[2] memory _percents
 	) public onlyOwner {
 		StakingRewardsInfo storage info =
 			stakingRewardsInfoByStakingToken[stakingToken];
@@ -70,8 +70,8 @@ contract StakingRewardsFactory is Ownable {
 				address(this),
 				rewardsToken,
 				stakingToken,
-				stakedTimeToClaim,
-				timelock
+				_timeInSeconds,
+				_percents
 			)
 		);
 		info.rewardAmount = rewardAmount;
