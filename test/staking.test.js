@@ -1,6 +1,5 @@
 const { artifacts } = require("hardhat");
-const IStakeContract = artifacts.require("StakingRewards");
-const StakingRewardsFactory = artifacts.require("StakingRewardsFactory");
+const FARM = artifacts.require("FARM");
 const Token = artifacts.require("GKHAN");
 const Token2 = artifacts.require("XGKHAN");
 
@@ -24,7 +23,7 @@ fromWei = (num) => web3.utils.fromWei(num);
 contract(
   "Staking",
   ([owner, user, admin1, admin2, user2, feeReceiver, pool]) => {
-    let token, factory, genesis, token2;
+    let token, farm, token2;
 
     beforeEach(async function () {
       const maxSupply = toBN(20000000000);
@@ -44,84 +43,29 @@ contract(
       token2 = await Token2.new(maxSupply);
       const algo = await token.getAmountsToFee();
       console.log(algo[0].toString(), "este es el arreglo");
-      genesis = Number(await time.latest()) + 1;
-      factory = await StakingRewardsFactory.new(token2.address, genesis);
 
       await token.mint(owner, maxSupply, { from: owner });
+
+      const _timeInSeconds = [time.duration.days(15), time.duration.days(180)],
+        _percents = [5, 95];
+      farm = await FARM.new();
+      await farm.initialize(
+        token2.address,
+        token.address,
+        _timeInSeconds,
+        _percents
+      );
     });
 
-    describe("Staking Factory works", () => {
-      it("The owner can deploy and update the stake", async function () {
-        const _stakingToken = token.address,
-          _rewardsAmount = 50,
-          _rewardsDuration = 8000,
-          _timeInSeconds = [time.duration.days(15), time.duration.days(180)],
-          _percents = [5, 95];
-
-        await factory.deploy(
-          _stakingToken,
-          _rewardsAmount,
-          _rewardsDuration,
-          _timeInSeconds,
-          _percents
-        );
-
-        const stk = await factory.stakingRewardsInfoByStakingToken(
-          token.address
-        );
-
-        expect(stk.duration.toString()).to.equal("8000");
-        expect(stk.rewardAmount.toString()).to.equal("50");
-
-        await factory.update(
-          _stakingToken,
-          80,
-          9000,
-          _timeInSeconds,
-          _percents
-        );
-
-        const stk2 = await factory.stakingRewardsInfoByStakingToken(
-          token.address
-        );
-
-        expect(stk2.duration.toString()).to.equal("9000");
-        expect(stk2.rewardAmount.toString()).to.equal("80");
-      });
+    describe("Farm works", () => {
       it("Users cannot withdraw or exit before timelock", async function () {
         await token.transfer(user, toBN(20));
-        const _timeInSeconds = [
-          time.duration.days(15),
-          time.duration.days(180),
-        ];
-        const _percents = [5, 95];
-        const _stakingToken = token.address,
-          _rewardsAmount = toBN("50"),
-          _rewardsDuration = (await time.latest()) + 500;
-        await token2.transfer(factory.address, toBN("50"));
-        // //the owner create the stake
-        await factory.deploy(
-          _stakingToken,
-          _rewardsAmount,
-          _rewardsDuration,
-          _timeInSeconds,
-          _percents
-        );
+
         await time.increase(1);
-
-        await factory.notifyRewardAmounts();
-
-        const stk = (
-          await factory.stakingRewardsInfoByStakingToken(token.address)
-        ).stakingRewards;
-        var stakeContract = new web3.eth.Contract(
-          IStakeContract.abi,
-          stk.toString()
-        );
-
-        await token.approve(stk, toBN("10"), { from: user });
-        await token.setExcludeFeeWallets([stk.toString()], true);
-        await stakeContract.methods.stake(toBN("10")).send({ from: user });
+        await token2.mint(farm.address, toBN("10000"));
+        await token.approve(farm.address, toBN("10"), { from: user });
+        await token.setExcludeFeeWallets([farm.address], true);
+        await farm.stake(toBN("10"), { from: user });
 
         const balanceXghan = await token2.balanceOf(user);
         console.log(balanceXghan.toString());
@@ -130,45 +74,38 @@ contract(
         console.log(balanceghan.toString());
         expect(balanceghan.toString()).to.be.equal(toBN(10).toString());
         // await expectRevert(
-        //   stakeContract.methods.getReward().send({ from: user }),
+        //   farm.methods.getReward().send({ from: user }),
         //   "No time to claim yet"
         // );
         await expectRevert(
-          stakeContract.methods
-            .preWithdraw(toBN(1), 4000)
-            .send({ from: admin1 }),
+          farm.preWithdraw(toBN(1), 4000, { from: admin1 }),
           "User doesnt have enougth amount"
         );
-        const approve = await token2.approve(stk.toString(), toBN(10), {
+        const approve = await token2.approve(farm.address, toBN(10), {
           from: user,
         });
         await expectRevert(
-          stakeContract.methods.preWithdraw(toBN(1), 4000).send({ from: user }),
+          farm.preWithdraw(toBN(1), 4000, { from: user }),
           "Time should be greater than minimun"
         );
-        const preWithdraw = await stakeContract.methods
-          .preWithdraw(toBN(10), time.duration.days(70))
-          .send({ from: user });
+        const preWithdraw = await farm.preWithdraw(
+          toBN(10),
+          time.duration.days(70),
+          { from: user }
+        );
         await expectRevert(
-          stakeContract.methods.withdraw(1).send({ from: admin2 }),
+          farm.withdraw(1, { from: admin2 }),
           "Cannot withdraw yet"
         );
 
         await time.increase(time.duration.days(80));
         await expectRevert(
-          stakeContract.methods.withdraw(1).send({ from: admin2 }),
+          farm.withdraw(1, { from: admin2 }),
           "You are not the owner"
         );
         const balanceOfUserBeforeClaimToken2 = await token2.balanceOf(user);
 
-        const tx = await stakeContract.methods.getReward().send({ from: user });
-
-        const earned = web3.utils.toBN(parseInt(tx.events[0].raw.data, 16));
-
         const balanceOfUserToken2 = await token2.balanceOf(user);
-        expect(balanceOfUserToken2.toString()).to.equal(
-          balanceOfUserBeforeClaimToken2.add(earned).toString()
-        );
 
         const balanceUserToken1BeforeWithdraw = await token.balanceOf(user);
         console.log(
@@ -176,62 +113,16 @@ contract(
           "balance before withdrwa"
         );
 
-        const pre = await stakeContract.methods.preWithdrawDataById(1).call();
+        const pre = await farm.preWithdrawDataById(1);
         console.log(pre, "dataaaa    ");
-        await stakeContract.methods.withdraw(1).send({ from: user });
+        await farm.withdraw(1, { from: user });
         const balanceUserToken1AfterWithdraw = await token.balanceOf(user);
         console.log("errorrr", balanceUserToken1AfterWithdraw.toString());
         expect("13600000000000000000").to.equal(
           balanceUserToken1AfterWithdraw.toString()
         );
       });
-      it("Users can stake their tokens and receive rewards", async function () {
-        await token.transfer(user, toBN(20));
-        const _timeInSeconds = [3000, 16000];
-        const _percents = [50, 100];
-        const _stakingToken = token.address,
-          _rewardsAmount = toBN("50"),
-          _rewardsDuration = (await time.latest()) + 500;
 
-        await token2.transfer(factory.address, toBN("50"));
-        //the owner create the stake
-        await factory.deploy(
-          _stakingToken,
-          _rewardsAmount,
-          _rewardsDuration,
-          _timeInSeconds,
-          _percents
-        );
-        await time.increase(1);
-
-        await factory.notifyRewardAmounts();
-
-        const stk = (
-          await factory.stakingRewardsInfoByStakingToken(token.address)
-        ).stakingRewards;
-        var stakeContract = new web3.eth.Contract(
-          IStakeContract.abi,
-          stk.toString()
-        );
-        await token.setExcludeFeeWallets([stk.toString()], true);
-        await token.approve(stk, toBN("2"), { from: user });
-
-        await stakeContract.methods.stake(toBN("2")).send({ from: user });
-
-        await time.increase(time.duration.days(15));
-
-        const balanceOfUserBeforeClaim = await token2.balanceOf(user);
-
-        const tx = await stakeContract.methods.getReward().send({ from: user });
-
-        const earned = web3.utils.toBN(parseInt(tx.events[0].raw.data, 16));
-
-        const balanceOfUser = await token2.balanceOf(user);
-
-        expect(balanceOfUser.toString()).to.equal(
-          balanceOfUserBeforeClaim.add(earned).toString()
-        );
-      });
       it("Probando la funcionalidad del transfer del token ", async function () {
         let balanceOwner = await token.balanceOf(owner);
         console.log(balanceOwner.toString(), "balance of owner");
